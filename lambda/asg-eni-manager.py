@@ -18,16 +18,17 @@ def lambda_handler(event, context):
 
         instance_type, subnet_id = get_instance_data(instance_id)
 
-        interface_ids = create_interfaces(
-            subnet_id, eni_limits[instance_type]['enis'])
+        interface_ids = []
+        attachments = []
+        if not create_interfaces(interface_ids,
+            subnet_id, eni_limits[instance_type]['enis']):
 
-        attachments = attach_interfaces(interface_ids, instance_id)
+            delete_interfaces(interface_ids)
 
-        if not interface_ids:
             complete_lifecycle_action_failure(
                 asg_hook_name, asg_name, instance_id)
 
-        elif not attachments:
+        elif not attach_interfaces(interface_ids, instance_id):
             complete_lifecycle_action_failure(
                 asg_hook_name, asg_name, instance_id)
             delete_interfaces(interface_ids)
@@ -57,26 +58,25 @@ def get_instance_data(instance_id):
     return instance_type, vpc_subnet_id
 
 
-def create_interfaces(subnet_id, count):
-
-    network_interface_id = None
-
-    if subnet_id:
-        try:
-            network_interface = ec2_client.create_network_interface(
+def create_interfaces(interface_ids, subnet_id, count):
+    """Create <count> interfaces and return bool."""
+    try:
+        for idx in range(1,count):
+            eni = ec2_client.create_network_interface(
                 SubnetId=subnet_id)
-            network_interface_id = network_interface['NetworkInterface']['NetworkInterfaceId']
+            eni_id = eni['NetworkInterface']['NetworkInterfaceId']
+            interface_ids.append(eni_id)
 
-            log("Created network interface: {}".format(network_interface_id))
+            log("Created network interface: {}".format(eni_id))
 
-        except botocore.exceptions.ClientError as e:
-            log("Error creating network interface: {}".format(e.response['Error']))
+    except botocore.exceptions.ClientError as e:
+        log("Error creating network interface: {}".format(e.response['Error']))
+        return False
 
-    return network_interface_id
+    return True
 
 
-def attach_interfaces(network_interface_id, instance_id):
-    attachment = None
+def attach_interfaces(attachments, network_interface_id, instance_id):
 
     if network_interface_id and instance_id:
         try:
