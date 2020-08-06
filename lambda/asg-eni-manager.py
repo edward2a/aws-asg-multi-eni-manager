@@ -13,24 +13,24 @@ def lambda_handler(event, context):
     if event["detail-type"] == "EC2 Instance-launch Lifecycle Action":
 
         instance_id = event['detail']['EC2InstanceId']
-        LifecycleHookName = event['detail']['LifecycleHookName']
-        AutoScalingGroupName = event['detail']['AutoScalingGroupName']
+        asg_hook_name = event['detail']['LifecycleHookName']
+        asg_name = event['detail']['AutoScalingGroupName']
         subnet_id = get_subnet_id(instance_id)
         interface_id = create_interface(subnet_id)
         attachment = attach_interface(interface_id, instance_id)
 
         if not interface_id:
             complete_lifecycle_action_failure(
-                LifecycleHookName, AutoScalingGroupName, instance_id)
+                asg_hook_name, asg_name, instance_id)
 
         elif not attachment:
             complete_lifecycle_action_failure(
-                LifecycleHookName, AutoScalingGroupName, instance_id)
+                asg_hook_name, asg_name, instance_id)
             delete_interface(interface_id)
 
         else:
             complete_lifecycle_action_success(
-                LifecycleHookName, AutoScalingGroupName, instance_id)
+                asg_hook_name, asg_name, instance_id)
 
 
 def get_subnet_id(instance_id):
