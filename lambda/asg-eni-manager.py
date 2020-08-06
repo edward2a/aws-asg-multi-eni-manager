@@ -38,11 +38,13 @@ def lambda_handler(event, context):
 
 
 def get_instance_data(instance_id):
-
+    """Fetch instance details and return type and subnet."""
     try:
         result = ec2_client.describe_instances(InstanceIds=[instance_id])
+
         vpc_subnet_id = result['Reservations'][0]['Instances'][0]['SubnetId']
         instance_type = result['Reservations'][0]['Instances'][0]['InstanceType']
+
         log("Subnet id: {}".format(vpc_subnet_id))
         log("Instance type: {}".format(instance_type))
 
