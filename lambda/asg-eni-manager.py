@@ -15,30 +15,36 @@ def lambda_handler(event, context):
         instance_id = event['detail']['EC2InstanceId']
         asg_hook_name = event['detail']['LifecycleHookName']
         asg_name = event['detail']['AutoScalingGroupName']
-        subnet_id = get_subnet_id(instance_id)
-        interface_id = create_interface(subnet_id)
-        attachment = attach_interface(interface_id, instance_id)
 
-        if not interface_id:
+        instance_type, subnet_id = get_instance_data(instance_id)
+
+        interface_ids = create_interfaces(
+            subnet_id, eni_limits[instance_type]['enis'])
+
+        attachments = attach_interfaces(interface_ids, instance_id)
+
+        if not interface_ids:
             complete_lifecycle_action_failure(
                 asg_hook_name, asg_name, instance_id)
 
-        elif not attachment:
+        elif not attachments:
             complete_lifecycle_action_failure(
                 asg_hook_name, asg_name, instance_id)
-            delete_interface(interface_id)
+            delete_interfaces(interface_ids)
 
         else:
             complete_lifecycle_action_success(
                 asg_hook_name, asg_name, instance_id)
 
 
-def get_subnet_id(instance_id):
+def get_instance_data(instance_id):
 
     try:
         result = ec2_client.describe_instances(InstanceIds=[instance_id])
         vpc_subnet_id = result['Reservations'][0]['Instances'][0]['SubnetId']
+        instance_type = result['Reservations'][0]['Instances'][0]['InstanceType']
         log("Subnet id: {}".format(vpc_subnet_id))
+        log("Instance type: {}".format(instance_type))
 
     except botocore.exceptions.ClientError as e:
         log("Error describing the instance {}: {}".format(
@@ -46,10 +52,10 @@ def get_subnet_id(instance_id):
 
         vpc_subnet_id = None
 
-    return vpc_subnet_id
+    return instance_type, vpc_subnet_id
 
 
-def create_interface(subnet_id):
+def create_interfaces(subnet_id, count):
 
     network_interface_id = None
 
@@ -67,7 +73,7 @@ def create_interface(subnet_id):
     return network_interface_id
 
 
-def attach_interface(network_interface_id, instance_id):
+def attach_interfaces(network_interface_id, instance_id):
     attachment = None
 
     if network_interface_id and instance_id:
@@ -85,7 +91,7 @@ def attach_interface(network_interface_id, instance_id):
     return attachment
 
 
-def delete_interface(network_interface_id):
+def delete_interfaces(network_interface_id):
 
     try:
         ec2_client.delete_network_interface(
